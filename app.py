@@ -1,30 +1,46 @@
 import streamlit as st
 import numpy as np
-from skyfield.api import load, EarthSatellite
-import time
 import pandas as pd
-import plotly.graph_objects as go
+import requests  # Make sure 'requests' is in requirements.txt
+import time
+import plotly.graph_objects as go # Make sure 'plotly' is in requirements.txt
+from skyfield.api import load, EarthSatellite
 
 # --- Streamlit Config ---
 st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 
-# --- Load TLE Data (no caching here) ---
+# --- Load TLE Data (This is the fix) ---
 def load_tle_data():
     ts = load.timescale()
-    tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
-    st.write("Loading TLE data from CelesTrak...")
+    
+    # --- === ITHU THAN ANTHA FIX === ---
+    # Use the direct .txt file, it's more stable
+    tle_url_active = 'https://celestrak.org/NORAD/elements/active.txt'
+    st.write(f"Loading TLE data from: {tle_url_active}...")
     try:
-        all_satellites = load.tle_file(tle_url_active, reload=True)
+        # Use 'requests' with a 15-second timeout
+        tle_text = requests.get(tle_url_active, timeout=15).text
+        
+        # Now load the satellites from the text
+        # We use .splitlines() because skyfield's load.tle_file expects a list of lines
+        all_satellites = load.tle_file(tle_text.splitlines())
+        
         st.write(f"✅ Loaded {len(all_satellites)} active satellites.")
-        return ts, all_satellites
+        # Return the text AND the loaded objects
+        return ts, all_satellites, tle_text
+    
     except Exception as e:
         st.error(f"Error loading active satellites: {e}")
-        return ts, []
+        # Return empty values
+        return ts, [], ""
+    # --- === END OF FIX === ---
 
-# --- Cached Analysis (safe because it returns basic data) ---
+
+# --- Cached Analysis (Your smart logic) ---
 @st.cache_data(show_spinner=True)
-def run_conjunction_analysis(ts_now, tle_text, target_id, target_name, threshold_km):
+def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, threshold_km):
     ts = load.timescale()
+    # Load satellites from the cached text
     all_satellites = load.tle_file(tle_text.splitlines())
     start_time = time.time()
 
@@ -36,7 +52,8 @@ def run_conjunction_analysis(ts_now, tle_text, target_id, target_name, threshold
     dangerous_approaches = []
 
     # 24h timeline (1-minute resolution)
-    t0 = ts_now
+    # We create the time object from the string, so it's cacheable
+    t0 = ts.from_utc_strftime(ts_now_str) 
     t_range = ts.utc(t0.utc_datetime() + np.arange(0, 1440) / 1440)
     target_pos = target_sat.at(t_range).position.km
 
@@ -80,7 +97,7 @@ st.sidebar.info("Adjust to control how close an object must be to trigger an ale
 
 # Load Satellite Data
 with st.spinner("Fetching satellite database from CelesTrak..."):
-    ts, all_satellites = load_tle_data()
+    ts, all_satellites, tle_text = load_tle_data() # tle_text is the new variable
 
 if not all_satellites:
     st.error("❌ Failed to load satellite data. Please refresh.")
@@ -101,10 +118,16 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.write("---")
     st.header(f"Results for {selected_name}")
 
-    # Instead of caching Skyfield objects, we cache the TLE text
-    tle_text = "\n".join(s.tle for s in all_satellites)
+    # --- CACHE FIX ---
+    # Pass a simple string for the time, so the cache works.
+    # This key changes every 10 minutes, so we get fresh results
+    # without breaking the cache every second.
+    now = ts.now()
+    time_key = f"{now.utc_strftime('%Y-%m-%d-%H')}:{now.utc_minute // 10}"
+    # --- END CACHE FIX ---
+
     target_sat, dangerous_approaches, total_time = run_conjunction_analysis(
-        ts.now(), tle_text, target_id_to_run, selected_name, threshold_km
+        now.utc_strftime(), tle_text, target_id_to_run, selected_name, threshold_km
     )
 
     if not target_sat:
@@ -138,12 +161,12 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
 
             fig = go.Figure()
             fig.add_trace(go.Scatter3d(x=target_path[0], y=target_path[1], z=target_path[2],
-                                       mode='lines', name=selected_name))
+                                        mode='lines', name=selected_name))
             fig.add_trace(go.Scatter3d(x=debris_path[0], y=debris_path[1], z=debris_path[2],
-                                       mode='lines', name=first['name'], line=dict(dash='dot')))
+                                        mode='lines', name=first['name'], line=dict(dash='dot')))
             fig.update_layout(scene=dict(xaxis_title='X (km)', yaxis_title='Y (km)', zaxis_title='Z (km)'),
-                              margin=dict(l=0, r=0, b=0, t=30),
-                              height=600)
+                                    margin=dict(l=0, r=0, b=0, t=30),
+                                    height=600)
             st.plotly_chart(fig, use_container_width=True)
 
 st.sidebar.header("📘 About")
