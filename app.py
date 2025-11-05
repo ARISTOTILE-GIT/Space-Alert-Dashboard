@@ -4,15 +4,14 @@ from skyfield.api import load, EarthSatellite
 import time
 import pandas as pd # For better table display
 
-# --- === ITHU THAN PUTHIYA FIX === ---
-# Define the threshold here, at the top, so everyone can see it
+# --- Define the threshold here, at the top ---
 ALERT_THRESHOLD_KM = 100.0
-# --- === END OF FIX === ---
 
-
-# --- Caching Data Loading ---
-@st.cache_data
+# --- === ITHU THAN ANTHA FIX === ---
+# 'cache_data' ku pathila, 'cache_resource' use pannunga
+@st.cache_resource
 def load_tle_data():
+# --- === END OF FIX === ---
     ts = load.timescale()
     tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     print("Loading TLE data from CelesTrak...")
@@ -42,7 +41,6 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name):
     # 2. Create check list
     objects_to_check = [sat for sat in all_satellites if sat.model.satnum != target_id]
     
-    # We don't need to define ALERT_THRESHOLD_KM here anymore
     dangerous_approaches = []
 
     # 3. Set time range
@@ -68,7 +66,7 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name):
         distance_km = np.linalg.norm(raw_distance, axis=0) 
         min_distance = np.min(distance_km)
         
-        # Check threshold (it will use the global variable)
+        # Check threshold
         if min_distance < ALERT_THRESHOLD_KM:
             if min_distance < 0.01:
                 continue
@@ -99,14 +97,14 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name):
     
     return dangerous_approaches, total_time
 
-# --- Streamlit UI (Ithu than namma Web App) ---
+# --- Streamlit UI ---
 
 # 1. Title
 st.title("🛰️ Project 'Kuppai-Track'")
 st.markdown("A real-time conjunction alert system to track threats to our key satellites.")
 
 # 2. Load Data
-with st.spinner("Loading satellite database from CelesTrak... (One time only)"):
+with st.spinner("Loading satellite database from CelesTrak... (This may happen once per session)"):
     ts, all_satellites = load_tle_data()
 
 if all_satellites:
@@ -140,7 +138,6 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     # 5. Display Dashboard
     if not dangerous_approaches:
         st.success(f"✅ STATUS: GREEN")
-        # Intha line ippo work aagum, yenna 'ALERT_THRESHOLD_KM' global la irukku
         st.write(f"No objects predicted to come within {ALERT_THRESHOLD_KM} km of {selected_name} in the next 24 hours.")
     else:
         st.error(f"🚨 STATUS: RED - {len(dangerous_approaches)} Potential Conjunctions Found!")
