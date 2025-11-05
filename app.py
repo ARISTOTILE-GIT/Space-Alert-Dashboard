@@ -51,8 +51,11 @@ def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name,
     start_time = time.time()
 
     target_sat = next((sat for sat in all_satellites if sat.model.satnum == target_id), None)
+    
+    # --- === FIX 1: Don't return None, return serializable data === ---
     if not target_sat:
-        return None, [], 0.0, 0 # Added 0 for objects checked
+        return [], 0.0, 0 # Return empty list, 0 time, 0 objects
+    # --- === END OF FIX 1 === ---
 
     objects_to_check = [sat for sat in all_satellites if sat.model.satnum != target_id]
     dangerous_approaches = []
@@ -60,15 +63,10 @@ def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name,
     total_objects = len(objects_to_check)
 
     # 24h timeline (1-minute resolution)
-    # Convert timestamp -> timezone-aware datetime -> Skyfield time
     dt = datetime.utcfromtimestamp(ts_now_timestamp).replace(tzinfo=timezone.utc)
     t0 = ts.from_datetime(dt)
     
-    # --- === ITHU THAN ANTHA FINAL FIX (Line 75) === ---
-    # Use the 't0' Skyfield object directly with the numpy array
     t_range = t0 + (np.arange(0, 1440) / 1440)
-    # --- === END OF FIX === ---
-    
     target_pos = target_sat.at(t_range).position.km
 
     progress_bar = st.progress(0)
@@ -99,7 +97,10 @@ def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name,
 
     total_time = time.time() - start_time
     dangerous_approaches.sort(key=lambda x: x['distance_km'])
-    return target_sat, dangerous_approaches, total_time, total_objects
+    
+    # --- === FIX 2: Don't return the complex 'target_sat' object === ---
+    return dangerous_approaches, total_time, total_objects
+    # --- === END OF FIX 2 === ---
 
 # --- UI ---
 st.title("🛰️ Project 'Kuppai-Track'")
@@ -135,11 +136,14 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     # Get a cache-friendly float timestamp
     now_ts = datetime.utcnow().timestamp()
     
-    target_sat, dangerous_approaches, total_time, objects_checked = run_conjunction_analysis(
+    # --- === FIX 3: Only expect 3 return values (no 'target_sat') === ---
+    dangerous_approaches, total_time, objects_checked = run_conjunction_analysis(
         now_ts, tle_text, target_id_to_run, selected_name, threshold_km
     )
+    # --- === END OF FIX 3 === ---
 
-    if not target_sat:
+    # Check if target was found (if objects_checked is 0, it means target wasn't found)
+    if objects_checked == 0 and not dangerous_approaches:
         st.error(f"Target {selected_name} not found in TLE data.")
         st.stop()
 
@@ -165,9 +169,15 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
 
         # 3D Orbit Visualization (optional)
         st.subheader("🪐 3D Visualization (Closest Approach)")
+        
+        # --- === FIX 4: Re-find the target_sat object here (it's fast) === ---
+        target_sat = next((s for s in all_satellites if s.model.satnum == target_id_to_run), None)
+        # --- === END OF FIX 4 === ---
+
         first = dangerous_approaches[0]
         debris = next((s for s in all_satellites if s.model.satnum == first['id']), None)
-        if debris:
+        
+        if debris and target_sat: # Check if both were found
             st.write(f"Plotting orbit for **{selected_name}** vs. **{first['name']}**...")
             t_range_short = ts.utc(ts.now().utc_datetime() + np.arange(0, 120) / 1440)
             target_path = target_sat.at(t_range_short).position.km
