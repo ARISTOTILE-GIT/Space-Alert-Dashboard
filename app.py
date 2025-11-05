@@ -13,7 +13,6 @@ st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 def load_tle_data():
     ts = load.timescale()
     
-    # --- === ITHU THAN ANTHA FIX === ---
     # Use the 'gp.php' script, which is the "New Way" CelesTrak recommends
     tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     st.write(f"Loading TLE data from: {tle_url_active}...")
@@ -22,13 +21,11 @@ def load_tle_data():
         tle_text = requests.get(tle_url_active, timeout=20).text
         
         # 2. Save the text to a local file
-        #    (This is the part I missed in the last version)
         with open("active.txt", "w") as f:
             f.write(tle_text)
             
         # 3. Load the satellites from the file
         all_satellites = load.tle_file("active.txt")
-        # --- === END OF FIX === ---
         
         st.write(f"✅ Loaded {len(all_satellites)} active satellites.")
         # Return the text AND the loaded objects
@@ -45,13 +42,10 @@ def load_tle_data():
 def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, threshold_km):
     ts = load.timescale()
     
-    # --- === CACHE FIX === ---
     # We must re-load the TLE text inside the cached function
-    # We use a different filename to avoid conflicts
     with open("cache_tle.txt", "w") as f:
         f.write(tle_text)
     all_satellites = load.tle_file("cache_tle.txt")
-    # --- === END OF CACHE FIX === ---
 
     start_time = time.time()
 
@@ -65,7 +59,11 @@ def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, thres
     total_objects = len(objects_to_check)
 
     # 24h timeline (1-minute resolution)
-    t0 = ts.from_utc_strftime(ts_now_str) 
+    # --- === ITHU THAN ANTHA FIX (Line 68) === ---
+    # The correct method is .from_string()
+    t0 = ts.from_string(ts_now_str) 
+    # --- === END OF FIX === ---
+    
     t_range = ts.utc(t0.utc_datetime() + np.arange(0, 1440) / 1440)
     target_pos = target_sat.at(t_range).position.km
 
