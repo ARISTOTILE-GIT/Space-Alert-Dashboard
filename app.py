@@ -19,7 +19,7 @@ def load_tle_data():
     st.write(f"Loading TLE data from: {tle_url_active}...")
     try:
         # 1. Download the text with a timeout
-        tle_text = requests.get(tle_url_active, timeout=20).text
+        tle_text = requests.get(tle_url_active, timeout=40).text
         
         # 2. Save the text to a local file
         with open("active.txt", "w") as f:
