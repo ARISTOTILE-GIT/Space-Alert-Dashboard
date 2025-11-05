@@ -5,7 +5,7 @@ import requests  # Make sure 'requests' is in requirements.txt
 import time
 import plotly.graph_objects as go # Make sure 'plotly' is in requirements.txt
 from skyfield.api import load, EarthSatellite
-from datetime import datetime # --- === ITHU PUTHU IMPORT === ---
+from datetime import datetime, timezone # --- === ITHU PUTHU IMPORT === ---
 
 # --- Streamlit Config ---
 st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
@@ -40,7 +40,7 @@ def load_tle_data():
 
 # --- Cached Analysis (Your smart logic) ---
 @st.cache_data(show_spinner=True)
-def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, threshold_km):
+def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name, threshold_km):
     ts = load.timescale()
     
     # We must re-load the TLE text inside the cached function
@@ -60,10 +60,10 @@ def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, thres
     total_objects = len(objects_to_check)
 
     # 24h timeline (1-minute resolution)
-    # --- === ITHU THAN ANTHA FIX (Line 68) === ---
-    # Use strptime to parse the string back to a datetime, then to skyfield time
-    dt = datetime.strptime(ts_now_str, '%Y-%m-%d %H:%M:%S')
-    t0 = ts.utc(dt) 
+    # --- === ITHU THAN ANTHA FINAL FIX (Your Idea) === ---
+    # Convert timestamp -> timezone-aware datetime -> Skyfield time
+    dt = datetime.utcfromtimestamp(ts_now_timestamp).replace(tzinfo=timezone.utc)
+    t0 = ts.from_datetime(dt)
     # --- === END OF FIX === ---
     
     t_range = ts.utc(t0.utc_datetime() + np.arange(0, 1440) / 1440)
@@ -130,15 +130,13 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.write("---")
     st.header(f"Results for {selected_name}")
     
-    now = ts.now()
+    # --- === ITHU THAN ANTHA PUTHU CALL (Your Idea) === ---
+    # Get a cache-friendly float timestamp
+    now_ts = datetime.utcnow().timestamp()
+    # --- === END OF CALL === ---
     
-    # --- === ITHU THAN ANTHA PUTHU FORMAT === ---
-    # Create a clean string without ' UTC' at the end
-    now_clean_string = now.utc_strftime('%Y-%m-%d %H:%M:%S')
-    # --- === END OF FORMAT === ---
-
     target_sat, dangerous_approaches, total_time, objects_checked = run_conjunction_analysis(
-        now_clean_string, tle_text, target_id_to_run, selected_name, threshold_km
+        now_ts, tle_text, target_id_to_run, selected_name, threshold_km
     )
 
     if not target_sat:
