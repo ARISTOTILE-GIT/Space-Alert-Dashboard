@@ -1,26 +1,21 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import requests  # Make sure 'requests' is in requirements.txt
+import requests 
 import time
-import plotly.graph_objects as go # Make sure 'plotly' is in requirements.txt
+import plotly.graph_objects as go 
 from skyfield.api import load, EarthSatellite
-from datetime import datetime, timezone # Keep this import
+from datetime import datetime, timezone
 
-# --- Streamlit Config ---
-st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 
-# --- Function 1: Load LOCAL BACKUP file ---
-# --- === ITHU THAN ANTHA FIX === ---
-# We REMOVED @st.cache_data from here. It's not needed
-# because st.session_state already prevents it from re-running.
-# --- === END OF FIX === ---
+st.set_page_config(page_title="🛰️ Project Space Debris Alert Dashboard", layout="wide")
+
 def load_backup_data():
     st.write("Loading local backup data (`active.txt`)...")
     try:
-        # Load satellites from the local file in our repo
+        
         all_satellites = load.tle_file("active.txt")
-        # Read the text from the file for our cache key
+        
         with open("active.txt", "r") as f:
             tle_text = f.read()
         st.write(f"✅ Backup data loaded ({len(all_satellites)} objects).")
@@ -29,30 +24,30 @@ def load_backup_data():
         st.error(f"❌ Error loading local 'active.txt' file. Make sure it's uploaded to GitHub! {e}")
         return [], ""
 
-# --- Function 2: Download LIVE data (Not cached) ---
+
 def download_live_data():
     ts = load.timescale()
     tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     st.write(f"📡 Attempting to download LIVE data from: {tle_url_active}...")
     try:
-        # 1. Download the text with a timeout
+       
         tle_text = requests.get(tle_url_active, timeout=20).text
-        # 2. Load the satellites from the text
+        
         all_satellites = load.tle_file(tle_text.splitlines())
         st.success(f"✅ Live data loaded! Found {len(all_satellites)} satellites.")
-        # Return the text AND the loaded objects
+        
         return all_satellites, tle_text
     except Exception as e:
         st.error(f"❌ Live data download failed (Timeout/Error). Using backup. Error: {e}")
-        return None, None # Return None on failure
+        return None, None 
 
 
-# --- Function 3: Cached Analysis (Your smart logic) ---
+
 @st.cache_data(show_spinner=True)
 def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name, threshold_km):
     ts = load.timescale()
     
-    # We must re-load the TLE text inside the cached function
+    
     with open("cache_tle.txt", "w") as f:
         f.write(tle_text)
     all_satellites = load.tle_file("cache_tle.txt")
@@ -62,14 +57,14 @@ def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name,
     target_sat = next((sat for sat in all_satellites if sat.model.satnum == target_id), None)
     
     if not target_sat:
-        return [], 0.0, 0 # Return empty list, 0 time, 0 objects
+        return [], 0.0, 0 
 
     objects_to_check = [sat for sat in all_satellites if sat.model.satnum != target_id]
     dangerous_approaches = []
     
     total_objects = len(objects_to_check)
 
-    # 24h timeline (1-minute resolution)
+
     dt = datetime.utcfromtimestamp(ts_now_timestamp).replace(tzinfo=timezone.utc)
     t0 = ts.from_datetime(dt)
     
@@ -105,29 +100,26 @@ def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name,
     total_time = time.time() - start_time
     dangerous_approaches.sort(key=lambda x: x['distance_km'])
     
-    # Return serializable data only
+
     return dangerous_approaches, total_time, total_objects
 
-# --- UI ---
-st.title("🛰️ Project 'Kuppai-Track'")
+
+st.title("🛰️ Project 'Space Debris Alert Dashboard'")
 st.markdown("A real-time conjunction alert system to track threats to our key satellites.")
 
-# Get timescale once
+
 ts = load.timescale()
 
-# --- === STATE MANAGEMENT (The "Hybrid" Logic) === ---
-# Check if data is already loaded in the session
+
 if 'data_loaded' not in st.session_state:
-    # First time load: Get the backup data
-    all_sats, tle = load_backup_data() # This function is NOT cached anymore
+    
+    all_sats, tle = load_backup_data()
     st.session_state.all_satellites = all_sats
     st.session_state.tle_text = tle
     st.session_state.data_source = "Backup"
     st.session_state.data_loaded = True
-# --- === END OF STATE MANAGEMENT === ---
 
 
-# --- Sidebar UI ---
 st.sidebar.header("⚙️ Settings")
 threshold_km = st.sidebar.slider("Alert Distance Threshold (km)", 10.0, 500.0, 100.0, 10.0)
 st.sidebar.info("Adjust to control how close an object must be to trigger an alert.")
@@ -139,29 +131,28 @@ st.sidebar.info(
 )
 
 st.sidebar.header("🛰️ Data Source")
-# The "Try Live Data" button
+
 if st.sidebar.button("🔄 Try Download Live Data"):
     new_sats, new_text = download_live_data()
     if new_sats:
         st.session_state.all_satellites = new_sats
         st.session_state.tle_text = new_text
         st.session_state.data_source = "Live"
-        st.rerun() # Rerun to update the status text
+        st.rerun()
 
-# Show which data source we are currently using
+
 if st.session_state.data_source == "Live":
     st.sidebar.success("✅ Using LIVE Data")
 else:
     st.sidebar.warning("⚠️ Using LOCAL BACKUP Data (Data might be old)")
-# --- End of Sidebar ---
 
 
-# Stop if backup also failed
+
 if not st.session_state.all_satellites:
     st.error("Fatal Error: Could not load backup data. App cannot start.")
     st.stop()
 
-# Satellite Selection
+
 st.subheader("🎯 Select Target Satellite")
 TARGETS = {
     "International Space Station (ISS)": 25544,
@@ -171,34 +162,32 @@ TARGETS = {
 selected_name = st.selectbox("Choose a satellite to analyze:", TARGETS.keys())
 target_id_to_run = TARGETS[selected_name]
 
-# Run Analysis
+
 if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.write("---")
     st.header(f"Results for {selected_name}")
     
-    # Get a cache-friendly float timestamp
     now_ts = datetime.utcnow().timestamp()
-    
-    # Get the TLE text from our session state
+
     tle_text_to_use = st.session_state.tle_text
     
     dangerous_approaches, total_time, objects_checked = run_conjunction_analysis(
         now_ts, tle_text_to_use, target_id_to_run, selected_name, threshold_km
     )
 
-    # Check if target was found
+   
     if objects_checked == 0 and not dangerous_approaches:
         st.error(f"Target {selected_name} not found in the TLE data.")
         st.stop()
 
-    # Display key metrics
+  
     col1, col2, col3 = st.columns(3)
     col1.metric("⏱ Analysis Time (s)", f"{total_time:.2f}")
     col2.metric("🛰️ Objects Checked", f"{objects_checked:,}") # Add comma for thousands
     col3.metric("🚨 Alerts Found", len(dangerous_approaches))
 
 
-    # Results Display
+
     if not dangerous_approaches:
         st.success(f"✅ STATUS: GREEN — No objects within {threshold_km} km.")
     else:
@@ -249,14 +238,13 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
                 title=f"Closest Approach: {first['name']} ({first['distance_km']:.2f} km)",
                 scene=dict(
                     xaxis_title='X (km)', yaxis_title='Y (km)', zaxis_title='Z (km)',
-                    aspectmode='data' # This makes the Earth spherical
+                    aspectmode='data' 
                 ),
                 margin=dict(l=0, r=0, b=0, t=40),
                 height=600
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        # --- Your "Insight" Code ---
         st.write("---") 
         st.subheader("⚠️ Insights & Recommendation")
 
