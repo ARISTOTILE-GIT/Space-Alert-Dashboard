@@ -10,35 +10,42 @@ from datetime import datetime, timezone # Keep this import
 # --- Streamlit Config ---
 st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 
-# --- Load TLE Data ---
-def load_tle_data():
+# --- Function 1: Load LOCAL BACKUP file ---
+# This is fast and reliable. We cache it.
+@st.cache_data
+def load_backup_data():
+    st.write("Loading local backup data (`active.txt`)...")
+    try:
+        # Load satellites from the local file in our repo
+        all_satellites = load.tle_file("active.txt")
+        # Read the text from the file for our cache key
+        with open("active.txt", "r") as f:
+            tle_text = f.read()
+        st.write(f"✅ Backup data loaded ({len(all_satellites)} objects).")
+        return all_satellites, tle_text
+    except Exception as e:
+        st.error(f"❌ Error loading local 'active.txt' file. Make sure it's uploaded to GitHub! {e}")
+        return [], ""
+
+# --- Function 2: Download LIVE data (Not cached) ---
+def download_live_data():
     ts = load.timescale()
-    
-    # Use the 'gp.php' script, which is the "New Way" CelesTrak recommends
     tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
-    st.write(f"Loading TLE data from: {tle_url_active}...")
+    st.write(f"📡 Attempting to download LIVE data from: {tle_url_active}...")
     try:
         # 1. Download the text with a timeout
-        tle_text = requests.get(tle_url_active, timeout=40).text
-        
-        # 2. Save the text to a local file
-        with open("active.txt", "w") as f:
-            f.write(tle_text)
-            
-        # 3. Load the satellites from the file
-        all_satellites = load.tle_file("active.txt")
-        
-        st.write(f"✅ Loaded {len(all_satellites)} active satellites.")
+        tle_text = requests.get(tle_url_active, timeout=20).text
+        # 2. Load the satellites from the text
+        all_satellites = load.tle_file(tle_text.splitlines())
+        st.success(f"✅ Live data loaded! Found {len(all_satellites)} satellites.")
         # Return the text AND the loaded objects
-        return ts, all_satellites, tle_text
-    
+        return all_satellites, tle_text
     except Exception as e:
-        st.error(f"Error loading active satellites: {e}")
-        # Return empty values
-        return ts, [], ""
+        st.error(f"❌ Live data download failed (Timeout/Error). Using backup. Error: {e}")
+        return None, None # Return None on failure
 
 
-# --- Cached Analysis (Your smart logic) ---
+# --- Function 3: Cached Analysis (Your smart logic) ---
 @st.cache_data(show_spinner=True)
 def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name, threshold_km):
     ts = load.timescale()
@@ -103,16 +110,53 @@ def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name,
 st.title("🛰️ Project 'Kuppai-Track'")
 st.markdown("A real-time conjunction alert system to track threats to our key satellites.")
 
+# Get timescale once
+ts = load.timescale()
+
+# --- === STATE MANAGEMENT (The "Hybrid" Logic) === ---
+# Check if data is already loaded in the session
+if 'data_loaded' not in st.session_state:
+    # First time load: Get the backup data
+    all_sats, tle = load_backup_data()
+    st.session_state.all_satellites = all_sats
+    st.session_state.tle_text = tle
+    st.session_state.data_source = "Backup"
+    st.session_state.data_loaded = True
+# --- === END OF STATE MANAGEMENT === ---
+
+
+# --- Sidebar UI ---
 st.sidebar.header("⚙️ Settings")
 threshold_km = st.sidebar.slider("Alert Distance Threshold (km)", 10.0, 500.0, 100.0, 10.0)
 st.sidebar.info("Adjust to control how close an object must be to trigger an alert.")
 
-# Load Satellite Data
-with st.spinner("Fetching satellite database from CelesTrak..."):
-    ts, all_satellites, tle_text = load_tle_data() # tle_text is the new variable
+st.sidebar.header("📘 About")
+st.sidebar.info(
+    "This app uses the Skyfield library and live CelesTrak data to predict potential collisions "
+    "for major satellites over the next 24 hours."
+)
 
-if not all_satellites:
-    st.error("❌ Failed to load satellite data. Please refresh.")
+st.sidebar.header("🛰️ Data Source")
+# The "Try Live Data" button
+if st.sidebar.button("🔄 Try Download Live Data"):
+    new_sats, new_text = download_live_data()
+    if new_sats:
+        st.session_state.all_satellites = new_sats
+        st.session_state.tle_text = new_text
+        st.session_state.data_source = "Live"
+        st.rerun() # Rerun to update the status text
+
+# Show which data source we are currently using
+if st.session_state.data_source == "Live":
+    st.sidebar.success("✅ Using LIVE Data")
+else:
+    st.sidebar.warning("⚠️ Using LOCAL BACKUP Data (Data might be old)")
+# --- End of Sidebar ---
+
+
+# Stop if backup also failed
+if not st.session_state.all_satellites:
+    st.error("Fatal Error: Could not load backup data. App cannot start.")
     st.stop()
 
 # Satellite Selection
@@ -133,13 +177,16 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     # Get a cache-friendly float timestamp
     now_ts = datetime.utcnow().timestamp()
     
+    # Get the TLE text from our session state
+    tle_text_to_use = st.session_state.tle_text
+    
     dangerous_approaches, total_time, objects_checked = run_conjunction_analysis(
-        now_ts, tle_text, target_id_to_run, selected_name, threshold_km
+        now_ts, tle_text_to_use, target_id_to_run, selected_name, threshold_km
     )
 
     # Check if target was found
     if objects_checked == 0 and not dangerous_approaches:
-        st.error(f"Target {selected_name} not found in TLE data.")
+        st.error(f"Target {selected_name} not found in the TLE data.")
         st.stop()
 
     # Display key metrics
@@ -166,18 +213,16 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
         st.subheader("🪐 3D Visualization (Closest Approach)")
         
         # Re-find the target_sat object here (it's fast)
-        target_sat = next((s for s in all_satellites if s.model.satnum == target_id_to_run), None)
+        target_sat = next((s for s in st.session_state.all_satellites if s.model.satnum == target_id_to_run), None)
 
         first = dangerous_approaches[0]
-        debris = next((s for s in all_satellites if s.model.satnum == first['id']), None)
+        debris = next((s for s in st.session_state.all_satellites if s.model.satnum == first['id']), None)
         
         if debris and target_sat: # Check if both were found
             st.write(f"Plotting orbit for **{selected_name}** vs. **{first['name']}**...")
             
-            # --- === ITHU THAN ANTHA FINAL FIX (Line 182) === ---
             # Use the ts.now() Skyfield object directly
             t_range_short = ts.now() + (np.arange(0, 120) / 1440)
-            # --- === END OF FIX === ---
 
             target_path = target_sat.at(t_range_short).position.km
             debris_path = debris.at(t_range_short).position.km
@@ -209,17 +254,14 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
             )
             st.plotly_chart(fig, use_container_width=True)
 
-# 3D plot code mudinja odane...
-        
-        st.write("---") # Oru line pottu pirikalam
+        # --- Your "Insight" Code ---
+        st.write("---") 
         st.subheader("⚠️ Insights & Recommendation")
 
-        # Get the closest object from the list
         closest_object = dangerous_approaches[0]
         closest_dist = float(closest_object['distance_km'])
         closest_name = closest_object['name']
 
-        # Oru simple logic vechi conclusion sollalam
         if closest_dist < 25:
             st.warning(f"**Insight:** The closest object, **{closest_name}**, is predicted to pass within **{closest_dist:.2f} km**. This is a **HIGH-RISK** conjunction.")
             st.info(f"**Recommendation:** A **Debris Avoidance Maneuver (DAM)** is highly recommended for the **{selected_name}** to ensure a safe passing distance.")
@@ -229,9 +271,3 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
         else:
             st.info(f"**Insight:** While multiple objects are within the {threshold_km} km threshold, the closest object ({closest_name} at {closest_dist:.2f} km) is not an immediate collision threat.")
             st.info(f"**Recommendation:** No immediate action required. Continue routine monitoring.")
-
-st.sidebar.header("📘 About")
-st.sidebar.info(
-    "This app uses the Skyfield library and live CelesTrak data to predict potential collisions "
-    "for major satellites over the next 24 hours."
-)
