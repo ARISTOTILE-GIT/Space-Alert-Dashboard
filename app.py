@@ -4,6 +4,12 @@ from skyfield.api import load, EarthSatellite
 import time
 import pandas as pd # For better table display
 
+# --- === ITHU THAN PUTHIYA FIX === ---
+# Define the threshold here, at the top, so everyone can see it
+ALERT_THRESHOLD_KM = 100.0
+# --- === END OF FIX === ---
+
+
 # --- Caching Data Loading ---
 @st.cache_data
 def load_tle_data():
@@ -36,7 +42,7 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name):
     # 2. Create check list
     objects_to_check = [sat for sat in all_satellites if sat.model.satnum != target_id]
     
-    ALERT_THRESHOLD_KM = 100.0
+    # We don't need to define ALERT_THRESHOLD_KM here anymore
     dangerous_approaches = []
 
     # 3. Set time range
@@ -62,6 +68,7 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name):
         distance_km = np.linalg.norm(raw_distance, axis=0) 
         min_distance = np.min(distance_km)
         
+        # Check threshold (it will use the global variable)
         if min_distance < ALERT_THRESHOLD_KM:
             if min_distance < 0.01:
                 continue
@@ -101,19 +108,22 @@ st.markdown("A real-time conjunction alert system to track threats to our key sa
 # 2. Load Data
 with st.spinner("Loading satellite database from CelesTrak... (One time only)"):
     ts, all_satellites = load_tle_data()
-st.success(f"Successfully loaded {len(all_satellites)} active objects!")
+
+if all_satellites:
+    st.success(f"Successfully loaded {len(all_satellites)} active objects!")
+else:
+    st.error("Failed to load satellite data from CelesTrak. Please refresh the app.")
+    st.stop() # Stop the app if data loading fails
 
 # 3. User Selection
 st.subheader("Select Your Target Satellite")
 
-# --- === UPDATE INTHA EDATHULA === ---
 # Create a dictionary for targets
 TARGETS = {
     "International Space Station (ISS)": 25544,
     "Hubble Space Telescope (HST)": 20580,
-    "Starlink-4328": 51094  # PUTHU LINE
+    "Starlink-4328": 51094
 }
-# --- === END OF UPDATE === ---
 
 selected_name = st.selectbox("Select a target to track:", TARGETS.keys())
 target_id_to_run = TARGETS[selected_name]
@@ -130,6 +140,7 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     # 5. Display Dashboard
     if not dangerous_approaches:
         st.success(f"✅ STATUS: GREEN")
+        # Intha line ippo work aagum, yenna 'ALERT_THRESHOLD_KM' global la irukku
         st.write(f"No objects predicted to come within {ALERT_THRESHOLD_KM} km of {selected_name} in the next 24 hours.")
     else:
         st.error(f"🚨 STATUS: RED - {len(dangerous_approaches)} Potential Conjunctions Found!")
