@@ -10,32 +10,44 @@ from datetime import datetime, timezone # Keep this import
 # --- Streamlit Config ---
 st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 
-# --- Load TLE Data ---
+# --- Load TLE Data (With Retries) ---
 def load_tle_data():
     ts = load.timescale()
     
-    # Use the 'gp.php' script, which is the "New Way" CelesTrak recommends
     tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     st.write(f"Loading TLE data from: {tle_url_active}...")
-    try:
-        # 1. Download the text with a timeout
-        tle_text = requests.get(tle_url_active, timeout=30).text
-        
-        # 2. Save the text to a local file
-        with open("active.txt", "w") as f:
-            f.write(tle_text)
-            
-        # 3. Load the satellites from the file
-        all_satellites = load.tle_file("active.txt")
-        
-        st.write(f"✅ Loaded {len(all_satellites)} active satellites.")
-        # Return the text AND the loaded objects
-        return ts, all_satellites, tle_text
     
-    except Exception as e:
-        st.error(f"Error loading active satellites: {e}")
-        # Return empty values
-        return ts, [], ""
+    # --- === ITHU THAN ANTHA FIX (RETRY LOGIC) === ---
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            st.write(f"Attempt {attempt + 1} of {max_retries}...")
+            # 1. Download the text with a 30-second timeout
+            tle_text = requests.get(tle_url_active, timeout=30).text
+            
+            # 2. Save the text to a local file
+            with open("active.txt", "w") as f:
+                f.write(tle_text)
+                
+            # 3. Load the satellites from the file
+            all_satellites = load.tle_file("active.txt")
+            
+            st.write(f"✅ Loaded {len(all_satellites)} active satellites.")
+            # Return the text AND the loaded objects
+            return ts, all_satellites, tle_text
+        
+        except Exception as e:
+            st.warning(f"Attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2) # Wait 2 seconds before retrying
+            else:
+                st.error(f"Error loading active satellites after {max_retries} attempts.")
+                # Return empty values
+                return ts, [], ""
+    # --- === END OF FIX === ---
+    
+    # This line should not be reached, but as a fallback
+    return ts, [], ""
 
 
 # --- Cached Analysis (Your smart logic) ---
@@ -174,10 +186,8 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
         if debris and target_sat: # Check if both were found
             st.write(f"Plotting orbit for **{selected_name}** vs. **{first['name']}**...")
             
-            # --- === ITHU THAN ANTHA FINAL FIX (Line 182) === ---
             # Use the ts.now() Skyfield object directly
             t_range_short = ts.now() + (np.arange(0, 120) / 1440)
-            # --- === END OF FIX === ---
 
             target_path = target_sat.at(t_range_short).position.km
             debris_path = debris.at(t_range_short).position.km
@@ -209,8 +219,7 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
             )
             st.plotly_chart(fig, use_container_width=True)
 
-# 3D plot code mudinja odane...
-        
+        # --- Your "Insight" Code ---
         st.write("---") # Oru line pottu pirikalam
         st.subheader("⚠️ Insights & Recommendation")
 
@@ -229,7 +238,7 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
         else:
             st.info(f"**Insight:** While multiple objects are within the {threshold_km} km threshold, the closest object ({closest_name} at {closest_dist:.2f} km) is not an immediate collision threat.")
             st.info(f"**Recommendation:** No immediate action required. Continue routine monitoring.")
-            
+
 st.sidebar.header("📘 About")
 st.sidebar.info(
     "This app uses the Skyfield library and live CelesTrak data to predict potential collisions "
