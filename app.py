@@ -2,22 +2,13 @@ import streamlit as st
 import numpy as np
 from skyfield.api import load, EarthSatellite
 import time
-import pandas as pd
+import pandas as pd # For better table display
 
-# ===============================
-# 🚀 PROJECT: "KUPPAI-TRACK"
-# Real-Time Satellite Conjunction Alert System
-# ===============================
-
-# --- Global Constants ---
-ALERT_THRESHOLD_KM = 100.0  # Minimum approach distance threshold
-CHECK_MINUTES = 24 * 60     # Number of minutes to check ahead
-
-# --- Cached Data Loader ---
+# --- Caching Data Loading ---
 @st.cache_data
 def load_tle_data():
     ts = load.timescale()
-    tle_url_active = 'https://celestrak.com/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
+    tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     print("Loading TLE data from CelesTrak...")
     try:
         all_satellites = load.tle_file(tle_url_active, reload=True)
@@ -27,135 +18,133 @@ def load_tle_data():
         print(f"Error loading active satellites: {e}")
         return ts, []
 
-# --- Core Function ---
+# --- Namma Core Logic ah oru Function ah maathurom ---
 def run_conjunction_analysis(ts, all_satellites, target_id, target_name):
     start_time = time.time()
     
-    # 1. Find target satellite
-    target_sat = next((sat for sat in all_satellites if sat.model.satnum == target_id), None)
+    # 1. Select Target
+    target_sat = None
+    for sat in all_satellites:
+        if sat.model.satnum == target_id:
+            target_sat = sat
+            break
+
     if not target_sat:
         st.error(f"Error: Could not find {target_name} (ID: {target_id}) in the loaded data.")
         return [], 0.0
 
-    # 2. Exclude target itself
+    # 2. Create check list
     objects_to_check = [sat for sat in all_satellites if sat.model.satnum != target_id]
     
+    ALERT_THRESHOLD_KM = 100.0
     dangerous_approaches = []
 
-    # 3. Time range setup
+    # 3. Set time range
     t0 = ts.now()
-    t_range = ts.utc(t0.utc.year, t0.utc.month, t0.utc.day, t0.utc.hour,
-                     range(t0.utc.minute, t0.utc.minute + CHECK_MINUTES))
-
-    # 4. Compute target orbit
-    st.write(f"🛰️ Calculating path for **{target_name}**...")
+    minutes_in_day = 24 * 60
+    t_range = ts.utc(t0.utc.year, t0.utc.month, t0.utc.day, t0.utc.hour, range(t0.utc.minute, t0.utc.minute + minutes_in_day))
+    
+    # 4. Calculate Target's path
+    st.write(f"Calculating path for {target_name}...")
     target_pos = target_sat.at(t_range).position.km
-
-    # 5. Loop through other objects
-    st.write(f"--- Starting Conjunction Analysis ({len(objects_to_check)} objects) ---")
+    
+    st.write(f"--- Starting Conjunction Analysis (Checking {len(objects_to_check)} objects) ---")
+    
     progress_bar = st.progress(0)
     status_text = st.empty()
 
+    # 5. Loop through ALL other objects
     total_objects = len(objects_to_check)
     for i, debris in enumerate(objects_to_check):
-        try:
-            debris_pos = debris.at(t_range).position.km
-            raw_distance = target_pos - debris_pos
-            distance_km = np.linalg.norm(raw_distance, axis=0)
-            min_distance = np.min(distance_km)
-
-            if 0.01 < min_distance < ALERT_THRESHOLD_KM:
+        
+        debris_pos = debris.at(t_range).position.km
+        raw_distance = target_pos - debris_pos
+        distance_km = np.linalg.norm(raw_distance, axis=0) 
+        min_distance = np.min(distance_km)
+        
+        if min_distance < ALERT_THRESHOLD_KM:
+            if min_distance < 0.01:
+                continue
+            else:
                 min_index = np.argmin(distance_km)
                 time_of_closest_approach = t_range[min_index]
+                
                 result = {
-                    "Name": debris.name,
-                    "ID": debris.model.satnum,
-                    "Closest Distance (km)": round(min_distance, 2),
-                    "Time of Approach (UTC)": time_of_closest_approach.utc_strftime('%Y-%m-%d %H:%M:%S')
+                    "name": debris.name,
+                    "id": debris.model.satnum,
+                    "distance_km": min_distance,
+                    "time_utc": time_of_closest_approach.utc_strftime('%Y-%m-%d %H:%M:%S')
                 }
                 dangerous_approaches.append(result)
-        except Exception:
-            continue  # Skip any invalid satellites
         
-        # Update progress every 200 objects
-        if (i + 1) % 200 == 0 or i == total_objects - 1:
-            percent_complete = (i + 1) / total_objects
+        if (i+1) % 100 == 0: 
+            percent_complete = (i+1) / total_objects
             progress_bar.progress(percent_complete)
-            status_text.text(f"Checked {i + 1} / {total_objects} objects...")
+            status_text.text(f"Checked {i+1} / {total_objects} objects...")
 
     progress_bar.progress(1.0)
-    status_text.text("✅ Conjunction check complete!")
-
+    status_text.text(f"Checked {total_objects} / {total_objects} objects... Complete!")
+    
     end_time = time.time()
     total_time = end_time - start_time
-
-    # Sort by closest distance
-    dangerous_approaches.sort(key=lambda x: x["Closest Distance (km)"])
+    
+    dangerous_approaches.sort(key=lambda x: x['distance_km'])
+    
     return dangerous_approaches, total_time
 
-# ===============================
-# 🌍 STREAMLIT INTERFACE
-# ===============================
+# --- Streamlit UI (Ithu than namma Web App) ---
 
-st.title("🛰️ Project 'SAT-Track'")
-st.markdown("### Real-Time Satellite Conjunction Alert System")
-st.info("Tracks possible close approaches (conjunctions) between major satellites and other active space objects using Skyfield & CelesTrak data.")
+# 1. Title
+st.title("🛰️ Project 'Kuppai-Track'")
+st.markdown("A real-time conjunction alert system to track threats to our key satellites.")
 
-# --- Load Data ---
-with st.spinner("📡 Loading satellite database from CelesTrak (one-time only)..."):
+# 2. Load Data
+with st.spinner("Loading satellite database from CelesTrak... (One time only)"):
     ts, all_satellites = load_tle_data()
+st.success(f"Successfully loaded {len(all_satellites)} active objects!")
 
-if not all_satellites:
-    st.error("Failed to load satellite data. Please refresh or check your internet connection.")
-    st.stop()
+# 3. User Selection
+st.subheader("Select Your Target Satellite")
 
-st.success(f"✅ Successfully loaded {len(all_satellites)} active satellites!")
-
-# --- Show All Satellites (Optional) ---
-if st.checkbox("Show all loaded satellites"):
-    sat_info = [{"Name": sat.name, "ID": sat.model.satnum} for sat in all_satellites]
-    st.dataframe(pd.DataFrame(sat_info))
-
-# --- Satellite Selection ---
-st.subheader("🎯 Select Your Target Satellite")
+# --- === UPDATE INTHA EDATHULA === ---
+# Create a dictionary for targets
 TARGETS = {
     "International Space Station (ISS)": 25544,
     "Hubble Space Telescope (HST)": 20580,
-    "Starlink-4328": 51094
+    "Starlink-4328": 51094  # PUTHU LINE
 }
+# --- === END OF UPDATE === ---
+
 selected_name = st.selectbox("Select a target to track:", TARGETS.keys())
 target_id_to_run = TARGETS[selected_name]
 
-# --- Run Analysis ---
+# 4. Run Button
 if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.write("---")
-    st.header(f"📊 Analysis Results for {selected_name}")
-
+    st.header(f"Analysis Results for {selected_name}")
+    
     dangerous_approaches, total_time = run_conjunction_analysis(ts, all_satellites, target_id_to_run, selected_name)
-    st.info(f"⏱️ Computation Time: {total_time:.2f} seconds")
+    
+    st.write(f"--- Analysis Complete in {total_time:.2f} seconds ---")
 
+    # 5. Display Dashboard
     if not dangerous_approaches:
-        st.success("✅ **STATUS: GREEN** – No nearby objects detected.")
-        st.write(f"No objects predicted to come within **{ALERT_THRESHOLD_KM} km** of {selected_name} in the next 24 hours.")
+        st.success(f"✅ STATUS: GREEN")
+        st.write(f"No objects predicted to come within {ALERT_THRESHOLD_KM} km of {selected_name} in the next 24 hours.")
     else:
-        st.error(f"🚨 **STATUS: RED** – {len(dangerous_approaches)} Potential Conjunction(s) Found!")
-        df = pd.DataFrame(dangerous_approaches)
+        st.error(f"🚨 STATUS: RED - {len(dangerous_approaches)} Potential Conjunctions Found!")
+        
+        results_data = []
+        for item in dangerous_approaches:
+            results_data.append({
+                "Name": item['name'],
+                "ID": item['id'],
+                "Closest Distance (km)": f"{item['distance_km']:.2f}",
+                "Time of Approach (UTC)": item['time_utc']
+            })
+        
+        df = pd.DataFrame(results_data)
         st.dataframe(df)
 
-        # Download Button
-        csv = df.to_csv(index=False)
-        st.download_button(
-            "📥 Download Results as CSV",
-            data=csv,
-            file_name=f"conjunctions_{selected_name.replace(' ', '_')}.csv",
-            mime="text/csv"
-        )
-
-# --- Sidebar Info ---
-st.sidebar.header("ℹ️ About")
-st.sidebar.info("""
-**Project 'Kuppai-Track'**
-- Built with [Skyfield](https://rhodesmill.org/skyfield/) for orbital calculations.  
-- Data Source: [CelesTrak Active Satellites](https://celestrak.org/NORAD/elements/).  
-- Developed to analyze potential conjunctions and alert for space debris risks.
-""")
+st.sidebar.header("About")
+st.sidebar.info("This app uses the Skyfield library to calculate orbits and predict potential collisions (conjunctions) for key space assets.")
