@@ -17,7 +17,7 @@ CHECK_MINUTES = 24 * 60     # Number of minutes to check ahead
 @st.cache_data
 def load_tle_data():
     ts = load.timescale()
-    tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
+    tle_url_active = 'https://celestrak.com/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     print("Loading TLE data from CelesTrak...")
     try:
         all_satellites = load.tle_file(tle_url_active, reload=True)
