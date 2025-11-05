@@ -18,11 +18,17 @@ def load_tle_data():
     tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     st.write(f"Loading TLE data from: {tle_url_active}...")
     try:
-        # Use 'requests' with a 20-second timeout (to be safe)
+        # 1. Download the text with a timeout
         tle_text = requests.get(tle_url_active, timeout=20).text
         
-        # Now load the satellites from the text
-        all_satellites = load.tle_file(tle_text.splitlines())
+        # 2. Save the text to a local file
+        #    (This is the part I missed in the last version)
+        with open("active.txt", "w") as f:
+            f.write(tle_text)
+            
+        # 3. Load the satellites from the file
+        all_satellites = load.tle_file("active.txt")
+        # --- === END OF FIX === ---
         
         st.write(f"✅ Loaded {len(all_satellites)} active satellites.")
         # Return the text AND the loaded objects
@@ -32,15 +38,21 @@ def load_tle_data():
         st.error(f"Error loading active satellites: {e}")
         # Return empty values
         return ts, [], ""
-    # --- === END OF FIX === ---
 
 
 # --- Cached Analysis (Your smart logic) ---
 @st.cache_data(show_spinner=True)
 def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, threshold_km):
     ts = load.timescale()
-    # Load satellites from the cached text
-    all_satellites = load.tle_file(tle_text.splitlines())
+    
+    # --- === CACHE FIX === ---
+    # We must re-load the TLE text inside the cached function
+    # We use a different filename to avoid conflicts
+    with open("cache_tle.txt", "w") as f:
+        f.write(tle_text)
+    all_satellites = load.tle_file("cache_tle.txt")
+    # --- === END OF CACHE FIX === ---
+
     start_time = time.time()
 
     target_sat = next((sat for sat in all_satellites if sat.model.satnum == target_id), None)
