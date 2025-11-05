@@ -14,7 +14,7 @@ st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 def load_tle_data():
     ts = load.timescale()
     
-    tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
+    tle_url_active = 'https://celestrak.com/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     st.write(f"Loading TLE data from: {tle_url_active}...")
     
     # --- === ITHU THAN ANTHA FIX (RETRY LOGIC) === ---
