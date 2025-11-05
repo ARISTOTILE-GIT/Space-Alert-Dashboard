@@ -5,7 +5,7 @@ import requests  # Make sure 'requests' is in requirements.txt
 import time
 import plotly.graph_objects as go # Make sure 'plotly' is in requirements.txt
 from skyfield.api import load, EarthSatellite
-from datetime import datetime, timezone # --- === ITHU PUTHU IMPORT === ---
+from datetime import datetime, timezone # Keep this import
 
 # --- Streamlit Config ---
 st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
@@ -60,13 +60,15 @@ def run_conjunction_analysis(ts_now_timestamp, tle_text, target_id, target_name,
     total_objects = len(objects_to_check)
 
     # 24h timeline (1-minute resolution)
-    # --- === ITHU THAN ANTHA FINAL FIX (Your Idea) === ---
     # Convert timestamp -> timezone-aware datetime -> Skyfield time
     dt = datetime.utcfromtimestamp(ts_now_timestamp).replace(tzinfo=timezone.utc)
     t0 = ts.from_datetime(dt)
+    
+    # --- === ITHU THAN ANTHA FINAL FIX (Line 75) === ---
+    # Use the 't0' Skyfield object directly with the numpy array
+    t_range = t0 + (np.arange(0, 1440) / 1440)
     # --- === END OF FIX === ---
     
-    t_range = ts.utc(t0.utc_datetime() + np.arange(0, 1440) / 1440)
     target_pos = target_sat.at(t_range).position.km
 
     progress_bar = st.progress(0)
@@ -130,10 +132,8 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.write("---")
     st.header(f"Results for {selected_name}")
     
-    # --- === ITHU THAN ANTHA PUTHU CALL (Your Idea) === ---
     # Get a cache-friendly float timestamp
     now_ts = datetime.utcnow().timestamp()
-    # --- === END OF CALL === ---
     
     target_sat, dangerous_approaches, total_time, objects_checked = run_conjunction_analysis(
         now_ts, tle_text, target_id_to_run, selected_name, threshold_km
