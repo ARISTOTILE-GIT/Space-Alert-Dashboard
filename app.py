@@ -8,8 +8,7 @@ import plotly.graph_objects as go
 # --- Streamlit Config ---
 st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 
-# --- Caching Data Loading ---
-@st.cache_data(show_spinner=False)
+# --- Load TLE Data (no caching here) ---
 def load_tle_data():
     ts = load.timescale()
     tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
@@ -22,12 +21,13 @@ def load_tle_data():
         st.error(f"Error loading active satellites: {e}")
         return ts, []
 
-# --- Cached Analysis ---
+# --- Cached Analysis (safe because it returns basic data) ---
 @st.cache_data(show_spinner=True)
-def run_conjunction_analysis(ts, all_satellites, target_id, target_name, threshold_km):
+def run_conjunction_analysis(ts_now, tle_text, target_id, target_name, threshold_km):
+    ts = load.timescale()
+    all_satellites = load.tle_file(tle_text.splitlines())
     start_time = time.time()
-    
-    # Select Target
+
     target_sat = next((sat for sat in all_satellites if sat.model.satnum == target_id), None)
     if not target_sat:
         return None, [], 0.0
@@ -35,23 +35,20 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name, thresho
     objects_to_check = [sat for sat in all_satellites if sat.model.satnum != target_id]
     dangerous_approaches = []
 
-    # Time range (1-minute resolution for 24h)
-    t0 = ts.now()
-    t_range = ts.utc(t0.utc_datetime() + np.arange(0, 1440) / 1440)  # 24h timeline
-
+    # 24h timeline (1-minute resolution)
+    t0 = ts_now
+    t_range = ts.utc(t0.utc_datetime() + np.arange(0, 1440) / 1440)
     target_pos = target_sat.at(t_range).position.km
 
     progress_bar = st.progress(0)
     status_text = st.empty()
-
     total_objects = len(objects_to_check)
+
     for i, debris in enumerate(objects_to_check):
         debris_pos = debris.at(t_range).position.km
-        raw_distance = target_pos - debris_pos
-        distance_km = np.linalg.norm(raw_distance, axis=0)
+        distance_km = np.linalg.norm(target_pos - debris_pos, axis=0)
         min_distance = np.min(distance_km)
-        
-        # Check threshold
+
         if 0.01 < min_distance < threshold_km:
             min_index = np.argmin(distance_km)
             time_of_closest_approach = t_range[min_index]
@@ -61,9 +58,9 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name, thresho
                 "distance_km": min_distance,
                 "time_utc": time_of_closest_approach.utc_strftime('%Y-%m-%d %H:%M:%S')
             })
-        
-        if (i+1) % 100 == 0:
-            progress_bar.progress((i+1) / total_objects)
+
+        if (i + 1) % 100 == 0:
+            progress_bar.progress((i + 1) / total_objects)
             status_text.text(f"Checked {i+1}/{total_objects} objects...")
 
     progress_bar.progress(1.0)
@@ -73,21 +70,20 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name, thresho
     dangerous_approaches.sort(key=lambda x: x['distance_km'])
     return target_sat, dangerous_approaches, total_time
 
-# --- UI Start ---
+# --- UI ---
 st.title("🛰️ Project 'Kuppai-Track'")
 st.markdown("A real-time conjunction alert system to track threats to our key satellites.")
 
-# Sidebar Info
 st.sidebar.header("⚙️ Settings")
 threshold_km = st.sidebar.slider("Alert Distance Threshold (km)", 10.0, 500.0, 100.0, 10.0)
-st.sidebar.info("Adjust the alert distance to control sensitivity.")
+st.sidebar.info("Adjust to control how close an object must be to trigger an alert.")
 
-# Load Data
+# Load Satellite Data
 with st.spinner("Fetching satellite database from CelesTrak..."):
     ts, all_satellites = load_tle_data()
 
 if not all_satellites:
-    st.error("Failed to load satellite data. Please refresh the app.")
+    st.error("❌ Failed to load satellite data. Please refresh.")
     st.stop()
 
 # Satellite Selection
@@ -104,9 +100,11 @@ target_id_to_run = TARGETS[selected_name]
 if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.write("---")
     st.header(f"Results for {selected_name}")
-    
+
+    # Instead of caching Skyfield objects, we cache the TLE text
+    tle_text = "\n".join(s.tle for s in all_satellites)
     target_sat, dangerous_approaches, total_time = run_conjunction_analysis(
-        ts, all_satellites, target_id_to_run, selected_name, threshold_km
+        ts.now(), tle_text, target_id_to_run, selected_name, threshold_km
     )
 
     if not target_sat:
@@ -116,7 +114,7 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.metric("⏱ Analysis Time (s)", f"{total_time:.2f}")
     st.metric("🛰 Objects Checked", len(all_satellites))
 
-    # Results
+    # Results Display
     if not dangerous_approaches:
         st.success(f"✅ STATUS: GREEN — No objects within {threshold_km} km.")
     else:
@@ -129,14 +127,15 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
         } for item in dangerous_approaches])
         st.dataframe(df, use_container_width=True)
 
-        # Optional: 3D Visualization for first conjunction
+        # 3D Orbit Visualization (optional)
         st.write("### 🪐 3D Visualization (first conjunction example)")
         first = dangerous_approaches[0]
         debris = next((s for s in all_satellites if s.model.satnum == first['id']), None)
         if debris:
-            t_range_short = ts.utc(t0.utc_datetime() + np.arange(0, 120) / 1440)  # 2 hours
+            t_range_short = ts.utc(ts.now().utc_datetime() + np.arange(0, 120) / 1440)
             target_path = target_sat.at(t_range_short).position.km
             debris_path = debris.at(t_range_short).position.km
+
             fig = go.Figure()
             fig.add_trace(go.Scatter3d(x=target_path[0], y=target_path[1], z=target_path[2],
                                        mode='lines', name=selected_name))
@@ -150,5 +149,5 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
 st.sidebar.header("📘 About")
 st.sidebar.info(
     "This app uses the Skyfield library and live CelesTrak data to predict potential collisions "
-    "(conjunctions) for key satellites within the next 24 hours."
+    "for major satellites over the next 24 hours."
 )
