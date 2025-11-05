@@ -7,14 +7,16 @@ import pandas as pd # For better table display
 # --- Define the threshold here, at the top ---
 ALERT_THRESHOLD_KM = 100.0
 
-# --- === ITHU THAN ANTHA FIX === ---
-# 'cache_data' ku pathila, 'cache_resource' use pannunga
 @st.cache_resource
 def load_tle_data():
-# --- === END OF FIX === ---
     ts = load.timescale()
-    tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
-    print("Loading TLE data from CelesTrak...")
+    
+    # --- === ITHU THAN ANTHA FIX === ---
+    # Use the main .org domain's .txt file. This is the most stable URL.
+    tle_url_active = 'https://celestrak.org/NORAD/elements/active.txt'
+    # --- === END OF FIX === ---
+    
+    print(f"Loading TLE data from: {tle_url_active}")
     try:
         all_satellites = load.tle_file(tle_url_active, reload=True)
         print(f"Loaded {len(all_satellites)} active satellites.")
@@ -35,7 +37,7 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name):
             break
 
     if not target_sat:
-        st.error(f"Error: Could not find {target_name} (ID: {target_id}) in the loaded data.")
+        st.error(f"Error: Could not find {target_name} (ID: {target_id}) in the loaded data. The TLE data might be temporarily out of date.")
         return [], 0.0
 
     # 2. Create check list
@@ -103,6 +105,17 @@ def run_conjunction_analysis(ts, all_satellites, target_id, target_name):
 st.title("🛰️ Project 'Kuppai-Track'")
 st.markdown("A real-time conjunction alert system to track threats to our key satellites.")
 
+# --- Sidebar ---
+st.sidebar.header("About")
+st.sidebar.info("This app uses the Skyfield library to calculate orbits and predict potential collisions for key space assets.")
+
+# --- ADDING CLEAR CACHE BUTTON ---
+if st.sidebar.button("♻️ Clear Cache & Rerun"):
+    st.cache_resource.clear()
+    st.rerun()
+# --- END OF NEW BUTTON ---
+
+
 # 2. Load Data
 with st.spinner("Loading satellite database from CelesTrak... (This may happen once per session)"):
     ts, all_satellites = load_tle_data()
@@ -110,7 +123,7 @@ with st.spinner("Loading satellite database from CelesTrak... (This may happen o
 if all_satellites:
     st.success(f"Successfully loaded {len(all_satellites)} active objects!")
 else:
-    st.error("Failed to load satellite data from CelesTrak. Please refresh the app.")
+    st.error("Failed to load satellite data from CelesTrak. Please refresh the app or try clearing the cache.")
     st.stop() # Stop the app if data loading fails
 
 # 3. User Selection
@@ -153,6 +166,3 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
         
         df = pd.DataFrame(results_data)
         st.dataframe(df)
-
-st.sidebar.header("About")
-st.sidebar.info("This app uses the Skyfield library to calculate orbits and predict potential collisions (conjunctions) for key space assets.")
