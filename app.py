@@ -11,8 +11,10 @@ from datetime import datetime, timezone # Keep this import
 st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 
 # --- Function 1: Load LOCAL BACKUP file ---
-# This is fast and reliable. We cache it.
-@st.cache_data
+# --- === ITHU THAN ANTHA FIX === ---
+# We REMOVED @st.cache_data from here. It's not needed
+# because st.session_state already prevents it from re-running.
+# --- === END OF FIX === ---
 def load_backup_data():
     st.write("Loading local backup data (`active.txt`)...")
     try:
@@ -117,7 +119,7 @@ ts = load.timescale()
 # Check if data is already loaded in the session
 if 'data_loaded' not in st.session_state:
     # First time load: Get the backup data
-    all_sats, tle = load_backup_data()
+    all_sats, tle = load_backup_data() # This function is NOT cached anymore
     st.session_state.all_satellites = all_sats
     st.session_state.tle_text = tle
     st.session_state.data_source = "Backup"
