@@ -5,11 +5,12 @@ import requests  # Make sure 'requests' is in requirements.txt
 import time
 import plotly.graph_objects as go # Make sure 'plotly' is in requirements.txt
 from skyfield.api import load, EarthSatellite
+from datetime import datetime # --- === ITHU PUTHU IMPORT === ---
 
 # --- Streamlit Config ---
 st.set_page_config(page_title="🛰️ Project Kuppai-Track", layout="wide")
 
-# --- Load TLE Data (This is the fix) ---
+# --- Load TLE Data ---
 def load_tle_data():
     ts = load.timescale()
     
@@ -60,8 +61,9 @@ def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, thres
 
     # 24h timeline (1-minute resolution)
     # --- === ITHU THAN ANTHA FIX (Line 68) === ---
-    # The correct method is .from_string()
-    t0 = ts.from_string(ts_now_str) 
+    # Use strptime to parse the string back to a datetime, then to skyfield time
+    dt = datetime.strptime(ts_now_str, '%Y-%m-%d %H:%M:%S')
+    t0 = ts.utc(dt) 
     # --- === END OF FIX === ---
     
     t_range = ts.utc(t0.utc_datetime() + np.arange(0, 1440) / 1440)
@@ -129,9 +131,14 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.header(f"Results for {selected_name}")
     
     now = ts.now()
-    # We pass the simple string time to the cache
+    
+    # --- === ITHU THAN ANTHA PUTHU FORMAT === ---
+    # Create a clean string without ' UTC' at the end
+    now_clean_string = now.utc_strftime('%Y-%m-%d %H:%M:%S')
+    # --- === END OF FORMAT === ---
+
     target_sat, dangerous_approaches, total_time, objects_checked = run_conjunction_analysis(
-        now.utc_strftime(), tle_text, target_id_to_run, selected_name, threshold_km
+        now_clean_string, tle_text, target_id_to_run, selected_name, threshold_km
     )
 
     if not target_sat:
