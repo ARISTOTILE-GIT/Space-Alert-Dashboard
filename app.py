@@ -14,15 +14,14 @@ def load_tle_data():
     ts = load.timescale()
     
     # --- === ITHU THAN ANTHA FIX === ---
-    # Use the direct .txt file, it's more stable
-    tle_url_active = 'https://celestrak.org/NORAD/elements/active.txt'
+    # Use the 'gp.php' script, which is the "New Way" CelesTrak recommends
+    tle_url_active = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
     st.write(f"Loading TLE data from: {tle_url_active}...")
     try:
-        # Use 'requests' with a 15-second timeout
-        tle_text = requests.get(tle_url_active, timeout=15).text
+        # Use 'requests' with a 20-second timeout (to be safe)
+        tle_text = requests.get(tle_url_active, timeout=20).text
         
         # Now load the satellites from the text
-        # We use .splitlines() because skyfield's load.tle_file expects a list of lines
         all_satellites = load.tle_file(tle_text.splitlines())
         
         st.write(f"✅ Loaded {len(all_satellites)} active satellites.")
@@ -46,20 +45,21 @@ def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, thres
 
     target_sat = next((sat for sat in all_satellites if sat.model.satnum == target_id), None)
     if not target_sat:
-        return None, [], 0.0
+        return None, [], 0.0, 0 # Added 0 for objects checked
 
     objects_to_check = [sat for sat in all_satellites if sat.model.satnum != target_id]
     dangerous_approaches = []
+    
+    total_objects = len(objects_to_check)
 
     # 24h timeline (1-minute resolution)
-    # We create the time object from the string, so it's cacheable
     t0 = ts.from_utc_strftime(ts_now_str) 
     t_range = ts.utc(t0.utc_datetime() + np.arange(0, 1440) / 1440)
     target_pos = target_sat.at(t_range).position.km
 
     progress_bar = st.progress(0)
     status_text = st.empty()
-    total_objects = len(objects_to_check)
+    status_text.text(f"Checking 0/{total_objects} objects...")
 
     for i, debris in enumerate(objects_to_check):
         debris_pos = debris.at(t_range).position.km
@@ -81,11 +81,11 @@ def run_conjunction_analysis(ts_now_str, tle_text, target_id, target_name, thres
             status_text.text(f"Checked {i+1}/{total_objects} objects...")
 
     progress_bar.progress(1.0)
-    status_text.text("✅ Analysis Complete!")
+    status_text.text(f"✅ Analysis Complete! Checked {total_objects} objects.")
 
     total_time = time.time() - start_time
     dangerous_approaches.sort(key=lambda x: x['distance_km'])
-    return target_sat, dangerous_approaches, total_time
+    return target_sat, dangerous_approaches, total_time, total_objects
 
 # --- UI ---
 st.title("🛰️ Project 'Kuppai-Track'")
@@ -117,16 +117,10 @@ target_id_to_run = TARGETS[selected_name]
 if st.button(f"🚀 Run Analysis for {selected_name}"):
     st.write("---")
     st.header(f"Results for {selected_name}")
-
-    # --- CACHE FIX ---
-    # Pass a simple string for the time, so the cache works.
-    # This key changes every 10 minutes, so we get fresh results
-    # without breaking the cache every second.
+    
     now = ts.now()
-    time_key = f"{now.utc_strftime('%Y-%m-%d-%H')}:{now.utc_minute // 10}"
-    # --- END CACHE FIX ---
-
-    target_sat, dangerous_approaches, total_time = run_conjunction_analysis(
+    # We pass the simple string time to the cache
+    target_sat, dangerous_approaches, total_time, objects_checked = run_conjunction_analysis(
         now.utc_strftime(), tle_text, target_id_to_run, selected_name, threshold_km
     )
 
@@ -134,8 +128,12 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
         st.error(f"Target {selected_name} not found in TLE data.")
         st.stop()
 
-    st.metric("⏱ Analysis Time (s)", f"{total_time:.2f}")
-    st.metric("🛰 Objects Checked", len(all_satellites))
+    # Display key metrics
+    col1, col2, col3 = st.columns(3)
+    col1.metric("⏱ Analysis Time (s)", f"{total_time:.2f}")
+    col2.metric("🛰️ Objects Checked", f"{objects_checked:,}") # Add comma for thousands
+    col3.metric("🚨 Alerts Found", len(dangerous_approaches))
+
 
     # Results Display
     if not dangerous_approaches:
@@ -151,22 +149,40 @@ if st.button(f"🚀 Run Analysis for {selected_name}"):
         st.dataframe(df, use_container_width=True)
 
         # 3D Orbit Visualization (optional)
-        st.write("### 🪐 3D Visualization (first conjunction example)")
+        st.subheader("🪐 3D Visualization (Closest Approach)")
         first = dangerous_approaches[0]
         debris = next((s for s in all_satellites if s.model.satnum == first['id']), None)
         if debris:
+            st.write(f"Plotting orbit for **{selected_name}** vs. **{first['name']}**...")
             t_range_short = ts.utc(ts.now().utc_datetime() + np.arange(0, 120) / 1440)
             target_path = target_sat.at(t_range_short).position.km
             debris_path = debris.at(t_range_short).position.km
 
             fig = go.Figure()
             fig.add_trace(go.Scatter3d(x=target_path[0], y=target_path[1], z=target_path[2],
-                                        mode='lines', name=selected_name))
+                                        mode='lines', name=selected_name, line=dict(width=4)))
             fig.add_trace(go.Scatter3d(x=debris_path[0], y=debris_path[1], z=debris_path[2],
-                                        mode='lines', name=first['name'], line=dict(dash='dot')))
-            fig.update_layout(scene=dict(xaxis_title='X (km)', yaxis_title='Y (km)', zaxis_title='Z (km)'),
-                                    margin=dict(l=0, r=0, b=0, t=30),
-                                    height=600)
+                                        mode='lines', name=first['name'], line=dict(dash='dot', width=4)))
+            
+            # Add a sphere for Earth
+            fig.add_trace(go.Surface(
+                x=6371 * np.outer(np.cos(np.linspace(0, 2*np.pi, 30)), np.sin(np.linspace(0, np.pi, 30))),
+                y=6371 * np.outer(np.sin(np.linspace(0, 2*np.pi, 30)), np.sin(np.linspace(0, np.pi, 30))),
+                z=6371 * np.outer(np.ones(30), np.cos(np.linspace(0, np.pi, 30))),
+                colorscale=[[0, 'blue'], [1, 'blue']],
+                opacity=0.3,
+                showscale=False
+            ))
+
+            fig.update_layout(
+                title=f"Closest Approach: {first['name']} ({first['distance_km']:.2f} km)",
+                scene=dict(
+                    xaxis_title='X (km)', yaxis_title='Y (km)', zaxis_title='Z (km)',
+                    aspectmode='data' # This makes the Earth spherical
+                ),
+                margin=dict(l=0, r=0, b=0, t=40),
+                height=600
+            )
             st.plotly_chart(fig, use_container_width=True)
 
 st.sidebar.header("📘 About")
