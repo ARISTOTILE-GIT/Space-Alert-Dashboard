@@ -1,20 +1,22 @@
-# 🛰️ Space Debris Alert Dashboard (Project "Kuppai-Track")
+# 🛰️ Space Debris Alert Dashboard
 
-[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://your-app-name.streamlit.app)
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://space-alert-dashboard-try1.streamlit.app/)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![NumPy](https://img.shields.io/badge/NumPy-4D77CF?style=for-the-badge&logo=numpy&logoColor=white)](https://numpy.org/)
+[![Pandas](https://img.shields.io/badge/Pandas-130654?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
+[![Plotly](https://img.shields.io/badge/Plotly-3F4F75?style=for-the-badge&logo=plotly&logoColor=white)](https://plotly.com/python/)
+[![Skyfield](https://img.shields.io/badge/Skyfield-007849?style=for-the-badge)](https://rhodesmill.org/skyfield/)
 
 A Streamlit web app that calculates and visualizes real-time collision risks for key satellites (like the ISS and HST) from 13,000+ other space objects and debris.
 
 ## 🚀 Live App
 
 You can run the live application here:
-**[https://your-app-name.streamlit.app](https://your-app-name.streamlit.app)**
+**[https://space-alert-dashboard-try1.streamlit.app/](https://space-alert-dashboard-try1.streamlit.app/)**
 
-*(Note: Replace the link above with your actual Streamlit URL!)*
+![Space Debris Alert Dashboard Screenshot](https://raw.githubusercontent.com/ARISTOTILE-GIT/Space-Alert-Dashboard/main/demo-screenshot.png)
 
-![Kuppai-Track Screenshot](https://user-images.githubusercontent.com/your-username/your-repo/assets/1234/your-screenshot.png)
-
-*(Note: Replace this line with a real screenshot of your app. Upload a screenshot to your GitHub repo and paste the link here.)*
+*(**Machi, important!** Intha screenshot work aaganum na, neenga unga app ah run panni oru nalla **screenshot** eduthu, atha `demo-screenshot.png` nu save panni, unga GitHub repository la upload pannanum.)*
 
 ---
 
@@ -22,7 +24,7 @@ You can run the live application here:
 
 The orbit around Earth is increasingly crowded. With thousands of active satellites and tens of thousands of debris objects (like old rocket parts and dead satellites), the risk of collision is a serious problem. A single collision could create a cascade of new debris, making space unusable.
 
-This project, **"Kuppai-Track"**, is a simple but powerful "Space Traffic Alert" system.
+This project, **"Space Debris Alert Dashboard"**, is a simple but powerful "Space Traffic Alert" system.
 
 It allows a user to select a high-value satellite (like the **International Space Station**) and scans the next 24 hours for any potential conjunctions (close approaches) with over 13,000 other active objects. If any object is predicted to come within a user-defined threshold (e.g., 100 km), it flags a **RED ALERT**, provides a list of the threats, and offers a clear recommendation.
 
@@ -71,8 +73,8 @@ It allows a user to select a high-value satellite (like the **International Spac
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/](https://github.com/)[YOUR_USERNAME]/space-debris-alert-dashboard.git
-    cd space-debris-alert-dashboard
+    git clone [https://github.com/ARISTOTILE-GIT/Space-Alert-Dashboard.git](https://github.com/ARISTOTILE-GIT/Space-Alert-Dashboard.git)
+    cd Space-Alert-Dashboard
     ```
 
 2.  **Create a virtual environment (Recommended):**
@@ -85,7 +87,6 @@ It allows a user to select a high-value satellite (like the **International Spac
     ```bash
     pip install -r requirements.txt
     ```
-    *(Don't forget to have `requests`, `plotly`, etc., in your `requirements.txt` file!)*
 
 4.  **Run the app:**
     ```bash
