@@ -13,7 +13,7 @@ A Streamlit web app that calculates and visualizes real-time collision risks for
 
 You can run the live application here:
 
-👉 **[Try it Live on Streamlit!]](https://space-alert-dashboard-try1.streamlit.app/)** 👈 
+👉 **[Try it Live on Streamlit!](https://space-alert-dashboard-try1.streamlit.app/)** 👈 
 
 ## 📸 App Screenshots
 
