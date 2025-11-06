@@ -15,15 +15,15 @@ You can run the live application here:
 
 👉 **[Try it Live on Streamlit!]](https://space-alert-dashboard-try1.streamlit.app/)** 👈 
 
-## 📸 App Workings
+## 📸 App Screenshots
 
-Here is a look at the dashboard in action, showing a "RED ALERT" status and the list of potential threats.
+Here is the dashboard showing a "RED ALERT" status and the list of potential threats.
 
-![Space Debris Alert Dashboard Screenshot 1](https://raw.githubusercontent.com/ARISTOTILE-GIT/Space-Alert-Dashboard/main/demo-screenshot-1.png)
+![Space Debris Alert Dashboard - Main](https://raw.githubusercontent.com/ARISTOTILE-GIT/Space-Alert-Dashboard/main/demo-screenshot-1.png)
 
-When a threat is found, the app also generates an interactive 3D plot to visualize the orbits of the target and the approaching object.
+When a threat is found, the app generates an interactive 3D plot to visualize the orbits.
 
-![Space Debris Alert Dashboard Screenshot 2](https://raw.githubusercontent.com/ARISTOTILE-GIT/Space-Alert-Dashboard/main/demo-screenshot-2.png)
+![Space Debris Alert Dashboard - 3D Plot](https://raw.githubusercontent.com/ARISTOTILE-GIT/Space-Alert-Dashboard/main/demo-screenshot-2.png)
 
 ---
 
