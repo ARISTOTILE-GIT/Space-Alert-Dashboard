@@ -12,11 +12,18 @@ A Streamlit web app that calculates and visualizes real-time collision risks for
 ## 🚀 Live App
 
 You can run the live application here:
-**[https://space-alert-dashboard-try1.streamlit.app/](https://space-alert-dashboard-try1.streamlit.app/)**
 
-![Space Debris Alert Dashboard Screenshot](https://raw.githubusercontent.com/ARISTOTILE-GIT/Space-Alert-Dashboard/main/demo-screenshot.png)
+👉 **[Try it Live on Streamlit!]](https://space-alert-dashboard-try1.streamlit.app/)** 👈 
 
-*(**Machi, important!** Intha screenshot work aaganum na, neenga unga app ah run panni oru nalla **screenshot** eduthu, atha `demo-screenshot.png` nu save panni, unga GitHub repository la upload pannanum.)*
+## 📸 App Workings
+
+Here is a look at the dashboard in action, showing a "RED ALERT" status and the list of potential threats.
+
+![Space Debris Alert Dashboard Screenshot 1](https://raw.githubusercontent.com/ARISTOTILE-GIT/Space-Alert-Dashboard/main/demo-screenshot-1.png)
+
+When a threat is found, the app also generates an interactive 3D plot to visualize the orbits of the target and the approaching object.
+
+![Space Debris Alert Dashboard Screenshot 2](https://raw.githubusercontent.com/ARISTOTILE-GIT/Space-Alert-Dashboard/main/demo-screenshot-2.png)
 
 ---
 
@@ -58,14 +65,18 @@ It allows a user to select a high-value satellite (like the **International Spac
 
 ---
 
-## 📚 Technology Stack
+## 💻 Tech Stack
 
-* **Core:** Python 3.11+
-* **Web Framework:** Streamlit
-* **Orbital Mechanics:** Skyfield
-* **Data Visualization:** Plotly
-* **Data Handling:** Pandas, NumPy
-* **Live Data:** Requests
+| Component | Technology |
+| ----- | ----- |
+| **Core Language** | Python |
+| **Orbital Mechanics** | Skyfield |
+| **Web App & UI** | Streamlit |
+| **Data Visualization** | Plotly |
+| **Numerical Computing** | NumPy |
+| **Data Handling** | Pandas |
+| **Live Data Fetching** | Requests |
+| **Deployment** | Streamlit Cloud |
 
 ---
 
